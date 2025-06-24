@@ -232,21 +232,19 @@ def generate_natural_language_analysis(channel_name, video_title, video_desc, op
     )
     return res.choices[0].message.content.strip()
 
-def score_frame_with_saliency(frame, saliency_detector, frame_idx=None):
+def score_frame(frame, frame_idx=None):
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     brightness = np.mean(gray)
     sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
     contrast = np.std(gray)
-    success, saliency_map = saliency_detector.computeSaliency(frame)
-    saliency_score = np.mean(saliency_map) if success else 0
-    score = 0.6 * saliency_score + 0.2 * sharpness + 0.1 * brightness + 0.1 * contrast
+
+    score = 0.5 * sharpness + 0.3 * brightness + 0.2 * contrast
 
     return {
         "frame": frame,
         "index": frame_idx,
         "score": score,
         "components": {
-            "saliency": saliency_score,
             "sharpness": sharpness,
             "brightness": brightness,
             "contrast": contrast
@@ -262,37 +260,35 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     frame_indices = np.linspace(0, total_frames - 1, num=num_frames_to_score, dtype=int)
     print(f"⚙️  Sampling {len(frame_indices)} frames from video (first 5 indices: {frame_indices[:5]})")
-    saliency_detector = cv2.saliency.StaticSaliencyFineGrained_create()
-    scored_frames = []
 
+    scored_frames = []
     print("\n📊 Scoring frames...\n")
     for idx in frame_indices:
         cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ret, frame = cap.read()
         if not ret:
             continue
-        scored = score_frame_with_saliency(frame, saliency_detector, frame_idx=idx)
+        scored = score_frame(frame, frame_idx=idx)
         scored_frames.append(scored)
 
     cap.release()
 
-    # Top 4: highest score, saliency, brightness, contrast
+    # Top 3 by score, brightness, contrast (no saliency)
     best_score = max(scored_frames, key=lambda x: x['score'])
-    best_saliency = max(scored_frames, key=lambda x: x['components']['saliency'])
     best_brightness = max(scored_frames, key=lambda x: x['components']['brightness'])
     best_contrast = max(scored_frames, key=lambda x: x['components']['contrast'])
-    chosen = {id(f): f for f in [best_score, best_saliency, best_brightness, best_contrast]}
+    best_sharpness = max(scored_frames, key=lambda x: x['components']['sharpness'])
+    chosen = {id(f): f for f in [best_score, best_brightness, best_contrast, best_sharpness]}
 
-    # Additional 4 based on user-like preferences
+    # Additional 4 diverse selections (remove saliency logic)
     diverse_candidates = [f for f in scored_frames if id(f) not in chosen]
     diverse_scores = []
     for f in diverse_candidates:
         c = f["components"]
         score = (
-            0.3 * (np.isclose(c["sharpness"], 30, atol=10)) +
+            0.4 * (np.isclose(c["sharpness"], 30, atol=10)) +
             0.3 * (c["brightness"] < 120) +
-            0.2 * (c["contrast"] < 55) +
-            0.2 * (c["saliency"] > 0.07)
+            0.3 * (c["contrast"] < 55)
         )
         diverse_scores.append((score, f))
 
@@ -305,8 +301,8 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
     for i, item in enumerate(all_selected):
         c = item["components"]
         print(f"Frame {item['index']}: Score={item['score']:.2f} | "
-              f"Saliency={c['saliency']:.4f}, Sharpness={c['sharpness']:.1f}, "
-              f"Brightness={c['brightness']:.1f}, Contrast={c['contrast']:.1f}")
+              f"Sharpness={c['sharpness']:.1f}, Brightness={c['brightness']:.1f}, "
+              f"Contrast={c['contrast']:.1f}")
         filename = f"custom_frame_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
         filepath = os.path.join(output_dir, filename)
         cv2.imwrite(filepath, item["frame"])
