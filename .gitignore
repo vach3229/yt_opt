@@ -9,3 +9,4 @@ include/
 
 # Ignore environment variables
 .env
+pyvenv.cfg
