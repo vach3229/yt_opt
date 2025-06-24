@@ -1,8 +1,8 @@
-numpy
 Flask
 gunicorn
 python-dotenv
-opencv-contrib-python
-openai
 requests
+openai
+numpy
 scikit-learn
+opencv-contrib-python-headless
