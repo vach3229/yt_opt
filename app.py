@@ -362,8 +362,9 @@ def description():
     
 @app.route("/thumbnails", methods=["GET", "POST"])
 def thumbnails():
-    thumbnails = []
+    thumbnails_data = []
     message = ""
+    temp_files = []
 
     if request.method == "POST":
         video = request.files.get("video")
@@ -371,20 +372,31 @@ def thumbnails():
             filename = secure_filename(video.filename)
             upload_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
             video.save(upload_path)
+            temp_files.append(upload_path)
 
             try:
                 scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER)
                 for path in scored_paths:
                     rel_path = os.path.relpath(path, "static")
-                    thumbnails.append({
+                    thumbnails_data.append({
                         "path": rel_path,
                         "filename": os.path.basename(path)
                     })
+                    temp_files.append(path)
                 message = "✅ Thumbnails successfully generated!"
             except Exception as e:
                 message = f"❌ Error during thumbnail generation: {e}"
 
-    return render_template("thumbnails.html", thumbnails=thumbnails, message=message)
+    response = render_template("thumbnails.html", thumbnails=thumbnails_data, message=message)
+
+    # Delete all temporary files after rendering
+    for f in temp_files:
+        try:
+            os.remove(f)
+        except Exception as e:
+            print(f"Warning: failed to delete {f}: {e}")
+
+    return response
 
 @app.route("/download/<filename>")
 def download_file(filename):
@@ -395,3 +407,21 @@ if __name__ == "__main__":
     app.run(debug=True)
 
 
+@app.route("/admin/cleanup", methods=["POST"])
+def cleanup():
+    folders_to_clean = [
+        os.path.join("static", "uploads"),
+        os.path.join("static", "thumbnails")
+    ]
+    deleted_files = []
+    for folder in folders_to_clean:
+        if not os.path.exists(folder):
+            continue
+        for filename in os.listdir(folder):
+            file_path = os.path.join(folder, filename)
+            try:
+                os.remove(file_path)
+                deleted_files.append(filename)
+            except Exception as e:
+                print(f"Error deleting {file_path}: {e}")
+    return f"✅ Deleted {len(deleted_files)} files: {deleted_files}"
