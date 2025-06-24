@@ -5,5 +5,5 @@ jinja2
 requests
 python-dotenv
 scikit-learn
-opencv-contrib-python
+opencv-contrib-python-headless==4.9.0.80
 openai
