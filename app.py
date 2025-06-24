@@ -251,7 +251,7 @@ def score_frame(frame, frame_idx=None):
         }
     }
 
-def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to_score=75):
+def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to_score=100):
     os.makedirs(output_dir, exist_ok=True)
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -264,14 +264,17 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
     scored_frames = []
     print("\n📊 Scoring frames...\n")
     for idx in frame_indices:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-        ret, frame = cap.read()
-        if not ret:
+        try:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                print(f"⚠️ Failed to read frame at index {idx}")
+                continue
+            scored = score_frame(frame, frame_idx=idx)
+            scored_frames.append(scored)
+        except Exception as e:
+            print(f"❌ Error at frame {idx}: {e}")
             continue
-        scored = score_frame(frame, frame_idx=idx)
-        scored_frames.append(scored)
-
-    cap.release()
 
     # Top 3 by score, brightness, contrast (no saliency)
     best_score = max(scored_frames, key=lambda x: x['score'])
