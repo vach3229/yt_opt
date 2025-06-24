@@ -251,7 +251,7 @@ def score_frame(frame, frame_idx=None):
         }
     }
 
-def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to_score=100):
+def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to_score=75):
     os.makedirs(output_dir, exist_ok=True)
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
