@@ -1,7 +1,9 @@
-Flask
-python-dotenv
-openai
+flask
+gunicorn
+werkzeug
+jinja2
 requests
+python-dotenv
 scikit-learn
 opencv-python
-uuid
+openai
