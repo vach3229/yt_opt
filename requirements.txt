@@ -5,5 +5,5 @@ jinja2
 requests
 python-dotenv
 scikit-learn
-opencv-python
+opencv-contrib-python
 openai
