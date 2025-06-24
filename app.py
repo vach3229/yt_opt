@@ -310,6 +310,15 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
 
     return thumbnails
 
+def clean_directories(*dirs):
+    for d in dirs:
+        for filename in os.listdir(d):
+            filepath = os.path.join(d, filename)
+            try:
+                os.remove(filepath)
+            except Exception as e:
+                print(f"❌ Could not delete {filepath}: {e}")
+
 @app.route("/")
 def index():
     return render_template("home.html")
@@ -363,15 +372,16 @@ def description():
 def thumbnails():
     thumbnails = []
     message = ""
-    temp_files = []
 
     if request.method == "POST":
+        # 🧹 Clean previous uploads and thumbnails
+        clean_directories(app.config["UPLOAD_FOLDER"], THUMBNAIL_FOLDER)
+
         video = request.files.get("video")
         if video and video.filename.endswith((".mp4", ".mov", ".avi", ".mkv")):
             filename = secure_filename(video.filename)
             upload_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
             video.save(upload_path)
-            temp_files.append(upload_path)  # track for deletion
 
             try:
                 scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER)
@@ -381,23 +391,12 @@ def thumbnails():
                         "path": rel_path,
                         "filename": os.path.basename(path)
                     })
-                    temp_files.append(path)  # track thumbnail for deletion
-
                 message = "✅ Thumbnails successfully generated!"
-
             except Exception as e:
                 message = f"❌ Error during thumbnail generation: {e}"
 
-    rendered_html = render_template("thumbnails.html", thumbnails=thumbnails, message=message)
+    return render_template("thumbnails.html", thumbnails=thumbnails, message=message)
 
-    # ⚠️ Clean up AFTER the page is rendered
-    for file_path in temp_files:
-        try:
-            os.remove(file_path)
-        except Exception:
-            pass  # fail silently
-
-    return rendered_html
 
 @app.route("/download/<filename>")
 def download_file(filename):
