@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>YouTube Optimizer – Home</title>
+  <style>
+    body { background: #23272f; color: #e6e8eb; font-family: 'Segoe UI', 'Inter', Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .container { text-align: center; background: #292f36; padding: 3rem 2.5rem; border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,0.13); }
+    h1 { color: #0a7ad9; margin-bottom: 2rem; }
+    a.button {
+      display: inline-block;
+      background: #0a7ad9;
+      color: #fff;
+      text-decoration: none;
+      font-weight: bold;
+      padding: 1rem 2rem;
+      border-radius: 8px;
+      margin: 1rem;
+      transition: background 0.2s ease;
+    }
+    a.button:hover {
+      background: #093f7a;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>YouTube Optimizer</h1>
+    <a href="{{ url_for('description') }}" class="button">Optimize Title & Description</a>
+    <a href="{{ url_for('thumbnails') }}" class="button">Extract Thumbnails</a>
+  </div>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>YouTube Optimizer</title>
+    <style>
+        body { background: #23272f; color: #e6e8eb; font-family: 'Segoe UI', 'Inter', Arial, sans-serif; margin: 0; padding: 0; }
+        .navbar {
+            background: #1d2026; padding: 1rem 2rem; display: flex; justify-content: flex-start; gap: 2rem;
+            border-bottom: 2px solid #0a7ad9; font-weight: 600;
+        }
+        .navbar a {
+            color: #e6e8eb; text-decoration: none; transition: color 0.2s ease;
+        }
+        .navbar a:hover {
+            color: #0a7ad9;
+        }
+        .container { max-width: 700px; margin: 2.6rem auto; background: #292f36; border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,0.13); padding: 2.3rem 2.5rem 2.7rem 2.5rem; }
+        h1 { color: #0a7ad9; font-weight: 800; letter-spacing: 0.01rem; margin-bottom: 1.5rem; }
+        label { font-weight: 600; display: block; margin: 1.07rem 0 0.2rem 0; letter-spacing: 0.01rem; }
+        input[type="text"], textarea { width: 100%; background: #353b42; color: #e6e8eb; border: 1.5px solid #0a7ad9; border-radius: 6px; padding: 0.68rem; margin-bottom: 1.1rem; font-size: 1.04rem; }
+        textarea { min-height: 90px; }
+        .button-row { display: flex; gap: 1.2rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+        button { background: #0a7ad9; color: #fff; border: none; border-radius: 7px; padding: 0.87rem 1.7rem; font-size: 1.08rem; font-weight: bold; cursor: pointer; box-shadow: 0 2px 8px rgba(10,122,217,0.11); transition: background 0.17s; }
+        button:hover { background: #093f7a; }
+        .alert { background: #d3eaff; color: #0a7ad9; padding: 0.68rem 1.2rem; border-radius: 8px; margin-bottom: 0.6rem; font-weight: 500; font-size: 1.04rem; }
+        .result-box { background: #23272f; border: 1.5px solid #0a7ad9; border-radius: 10px; margin-top: 2.1rem; padding: 1.6rem 1.3rem 1.3rem 1.3rem; }
+        .section-title { color: #43b0f1; font-weight: 700; margin-top: 1.2rem; margin-bottom: 0.3rem; letter-spacing: 0.01rem; }
+        .keyword-list, .tag-list { display: flex; flex-wrap: wrap; gap: 0.56rem; margin-top: 0.53rem; }
+        .chip { background: #0a7ad9; color: #fff; padding: 0.4rem 1.02rem; border-radius: 12px; font-size: 1.02rem; margin-bottom: 0.3rem; }
+        .ai-analysis { margin-top: 1.2rem; padding: 1.2rem 1.1rem; background: #1d2026; border-radius: 10px; border: 1px solid #19477c; font-size: 1.01rem; color: #e6e8eb; }
+        .q-box { background: #22262c; border: 1.5px solid #1166b5; border-radius: 10px; padding: 1.3rem 1.2rem; margin-bottom: 1.7rem; }
+        .question-label { color: #43b0f1; font-weight: 600; margin-bottom: 0.3rem; }
+        .summary-table { background: #1d2227; color: #a3adc4; border-radius: 10px; padding: 1rem 1.3rem; margin-bottom: 1.8rem; font-size: 0.97rem;}
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <a href="/">Home</a>
+        <a href="/description">Description Optimizer</a>
+        <a href="/thumbnails">Thumbnail Selector</a>
+    </div>
+
+    <div class="container">
+        <h1>YouTube Title & Description Optimizer</h1>
+
+        {% if step == "entry" %}
+        <form method="post" autocomplete="off">
+            <input type="hidden" name="step" value="entry">
+            <label for="channel_name">Channel Name</label>
+            <input type="text" id="channel_name" name="channel_name" placeholder="Enter YouTube channel name" required value="{{ channel_name }}">
+
+            <label for="video_title">Video Title</label>
+            <input type="text" id="video_title" name="video_title" placeholder="Enter video title" required value="{{ video_title }}">
+
+            <label for="video_desc">Video Description</label>
+            <textarea id="video_desc" name="video_desc" rows="5" placeholder="Paste your draft description" required>{{ video_desc }}</textarea>
+
+            {% if improved_message %}
+                <div class="alert">{{ improved_message }}</div>
+            {% endif %}
+
+            <div class="button-row">
+                <button type="submit" name="improve_prompt">Improve Description Prompt</button>
+                <button type="submit" name="proceed_questions">Proceed to Questions</button>
+            </div>
+
+            <div class="summary-table">
+                <strong>Description Length Guide:</strong><br>
+                &lt;300 chars: Vlogs, comedy, entertainment (Low/Medium SEO) <br>
+                300–1000: Gaming, mainstream, music (Medium SEO) <br>
+                1000–2000: Tutorials, competitive niches (High SEO) <br>
+                2000–5000: Deep dives, info-rich (Highest SEO)
+            </div>
+        </form>
+        {% endif %}
+
+        {% if step == "questions" %}
+        <form method="post" autocomplete="off">
+            <input type="hidden" name="step" value="questions">
+            <input type="hidden" name="channel_name" value="{{ channel_name }}">
+            <input type="hidden" name="video_title" value="{{ video_title }}">
+            <input type="hidden" name="video_desc" value="{{ video_desc }}">
+
+            <div class="q-box">
+                <div class="section-title">Answer these quick questions to give the AI more context:</div>
+                {% for q in questions %}
+                    <label class="question-label">{{ q }}</label>
+                    <input type="hidden" name="question" value="{{ q }}">
+                    <textarea name="answer_{{ loop.index0 }}" rows="2" required placeholder="Your answer..."></textarea>
+                {% endfor %}
+            </div>
+
+            <button type="submit" name="final_optimize">Optimize Description and Title</button>
+        </form>
+        {% endif %}
+
+        {% if step == "results" %}
+        <div class="result-box">
+            <div class="section-title">Optimized Title</div>
+            <p>{{ optimized_title }}</p>
+
+            <div class="section-title">Optimized Description</div>
+            <p>{{ optimized_desc }}</p>
+
+            <div class="section-title">Top Keywords</div>
+            <div class="keyword-list">
+                {% for kw in keywords %}
+                    <span class="chip">{{ kw }}</span>
+                {% endfor %}
+            </div>
+
+            <div class="section-title">YouTube Tags</div>
+            <div class="tag-list">
+                {% for tag in tags %}
+                    <span class="chip">{{ tag }}</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="ai-analysis">
+            <div class="section-title">AI Analysis</div>
+            <div style="white-space: pre-line;">{{ analysis | safe }}</div>
+        </div>
+
+        <div class="button-row" style="margin-top: 2rem;">
+            <a href="/description">
+                <button type="button">Try Another</button>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
