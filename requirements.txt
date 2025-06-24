@@ -4,3 +4,5 @@ gunicorn==21.2.0                   # Needed for deployment on Render
 python-dotenv==1.0.1              # To load environment variables from .env
 opencv-contrib-python-headless==4.9.0.80  # For OpenCV + saliency (headless version works better on servers)
 openai==1.23.6                    # API client for OpenAI
+requests==2.32.3                  # Only needed if you’re making manual HTTP requests
+scikit-learn==1.4.2              # Needed only if you're doing ML/model stuff
