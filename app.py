@@ -424,6 +424,7 @@ def thumbnails():
             filename = secure_filename(video.filename)
             upload_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
             video.save(upload_path)
+            print("✅ Video upload saved to disk.")
 
             try:
                 scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER)
