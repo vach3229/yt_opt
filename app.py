@@ -263,9 +263,10 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
     frame_indices = np.linspace(0, total_frames - 1, num=num_frames_to_score, dtype=int)
     print(f"⚙️ Sampling {len(frame_indices)} frames from video (first 5 indices: {frame_indices[:5]})")
 
-    # Preload frames to memory
+    # ✅ Preload frames into memory (before threading)
     frames = []
     for idx in frame_indices:
+        print(f"🔍 Attempting to grab frame at index {idx}/{total_frames}")
         cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ret, frame = cap.read()
         if not ret or frame is None:
@@ -274,6 +275,27 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
         frames.append((idx, frame))
     cap.release()
 
+    # 🧠 Define scoring logic
+    def score_frame(frame, frame_idx=None):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        brightness = np.mean(gray)
+        sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
+        contrast = np.std(gray)
+
+        score = 0.5 * sharpness + 0.3 * brightness + 0.2 * contrast
+
+        return {
+            "frame": frame,
+            "index": frame_idx,
+            "score": score,
+            "components": {
+                "sharpness": sharpness,
+                "brightness": brightness,
+                "contrast": contrast
+            }
+        }
+
+    # ⚡ Multithreaded scoring
     def process_frame(data):
         idx, frame = data
         try:
@@ -283,7 +305,6 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
             print(f"❌ Error processing frame {idx}: {e}")
             return None
 
-    # Multithreaded scoring
     scored_frames = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(process_frame, f) for f in frames]
@@ -295,7 +316,7 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
     if not scored_frames:
         raise ValueError("❌ No frames were successfully scored.")
 
-    # === Best + Diverse Selection Logic ===
+    # 🎯 Best + Diverse Selection
     best_score = max(scored_frames, key=lambda x: x['score'])
     best_brightness = max(scored_frames, key=lambda x: x['components']['brightness'])
     best_contrast = max(scored_frames, key=lambda x: x['components']['contrast'])
@@ -317,7 +338,7 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
     diverse_frames = [item[1] for item in diverse_scores[:4]]
     all_selected = list(chosen.values()) + diverse_frames
 
-    # Save thumbnails
+    # 💾 Save selected thumbnails
     thumbnails = []
     for i, item in enumerate(all_selected):
         c = item["components"]
