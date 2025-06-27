@@ -390,17 +390,24 @@ def thumbnails():
             upload_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
             video.save(upload_path)
 
+            # 🧪 TEMP: Test reading just the first frame
             try:
-                scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER)
-                for path in scored_paths:
-                    rel_path = os.path.relpath(path, "static")
+                cap = cv2.VideoCapture(upload_path)
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    frame = cv2.resize(frame, (640, 360))  # Resize if needed
+                    test_path = os.path.join(THUMBNAIL_FOLDER, "test_frame.jpg")
+                    cv2.imwrite(test_path, frame)
+                    rel_path = os.path.relpath(test_path, "static")
                     thumbnails.append({
                         "path": rel_path,
-                        "filename": os.path.basename(path)
+                        "filename": "test_frame.jpg"
                     })
-                message = "✅ Thumbnails successfully generated!"
+                    message = "✅ First frame extracted successfully!"
+                else:
+                    message = "❌ Failed to read the first frame."
             except Exception as e:
-                message = f"❌ Error during thumbnail generation: {e}"
+                message = f"❌ Error during frame extraction: {e}"
 
     return render_template("thumbnails.html", thumbnails=thumbnails, message=message)
 
@@ -409,33 +416,6 @@ def thumbnails():
 def download_file(filename):
     return send_from_directory(app.config["THUMBNAIL_FOLDER"], filename, as_attachment=True)
 
-
-@app.route("/test-one-frame")
-def test_one_frame():
-    import cv2
-    import numpy as np
-
-    video_path = "video2.mp4"  # or wherever you're uploading videos
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        return "❌ Failed to open video"
-
-    ret, frame = cap.read()
-    if not ret or frame is None:
-        return "❌ Failed to read first frame"
-
-    frame = cv2.resize(frame, (640, 360))
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    brightness = np.mean(gray)
-    sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
-    contrast = np.std(gray)
-
-    return (
-        f"✅ Success!<br>"
-        f"Brightness: {brightness:.2f}<br>"
-        f"Sharpness: {sharpness:.2f}<br>"
-        f"Contrast: {contrast:.2f}"
-    )
 
 if __name__ == "__main__":
     app.run(debug=True)
