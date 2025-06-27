@@ -251,6 +251,19 @@ def score_frame(frame, frame_idx=None):
         }
     }
 
+def save_scored_thumbnails(scored_frames, output_dir):
+    # Sort by score (or change to another metric if preferred)
+    scored_frames.sort(key=lambda x: x["score"], reverse=True)
+    saved_paths = []
+
+    for i, scored in enumerate(scored_frames[:6]):  # Save top 6 by default
+        filename = f"thumbnail_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
+        filepath = os.path.join(output_dir, filename)
+        cv2.imwrite(filepath, scored["frame"])
+        saved_paths.append(filepath)
+
+    return saved_paths
+
 def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to_score=10):
     os.makedirs(output_dir, exist_ok=True)
     cap = cv2.VideoCapture(video_path)
