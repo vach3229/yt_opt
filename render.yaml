@@ -3,3 +3,5 @@ services:
     name: yt-opt
     runtime: docker
     dockerfilePath: Dockerfile
+    plan: starter
+    startCommand: gunicorn app:app --timeout 120

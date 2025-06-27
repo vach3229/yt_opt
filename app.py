@@ -270,6 +270,10 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
             if not ret or frame is None:
                 print(f"⚠️ Failed to read frame at index {idx}")
                 continue
+
+            # 🔧 Resize frame here to reduce memory usage and standardize input
+            frame = cv2.resize(frame, (640, 360))  # or (320, 180) if you want even smaller
+
             scored = score_frame(frame, frame_idx=idx)
             scored_frames.append(scored)
         except Exception as e:
