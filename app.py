@@ -415,7 +415,7 @@ def test_one_frame():
     import cv2
     import numpy as np
 
-    video_path = "video.mp4"  # or wherever you're uploading videos
+    video_path = "video2.mp4"  # or wherever you're uploading videos
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return "❌ Failed to open video"
