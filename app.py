@@ -11,6 +11,7 @@ import numpy as np
 import uuid
 import argparse
 from werkzeug.utils import secure_filename
+from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "supersecret")
@@ -251,18 +252,6 @@ def score_frame(frame, frame_idx=None):
         }
     }
 
-def save_scored_thumbnails(scored_frames, output_dir):
-    # Sort by score (or change to another metric if preferred)
-    scored_frames.sort(key=lambda x: x["score"], reverse=True)
-    saved_paths = []
-
-    for i, scored in enumerate(scored_frames[:6]):  # Save top 6 by default
-        filename = f"thumbnail_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
-        filepath = os.path.join(output_dir, filename)
-        cv2.imwrite(filepath, scored["frame"])
-        saved_paths.append(filepath)
-
-    return saved_paths
 
 def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to_score=30):
     os.makedirs(output_dir, exist_ok=True)
@@ -274,35 +263,45 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
     frame_indices = np.linspace(0, total_frames - 1, num=num_frames_to_score, dtype=int)
     print(f"⚙️ Sampling {len(frame_indices)} frames from video (first 5 indices: {frame_indices[:5]})")
 
-    scored_frames = []
-    print("\n📊 Scoring frames...\n")
+    # Preload frames to memory
+    frames = []
     for idx in frame_indices:
-        try:
-            print(f"🔍 Attempting to grab frame at index {idx}/{total_frames}")
-            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-            ret, frame = cap.read()
-            if not ret or frame is None:
-                print(f"⚠️ Failed to read frame at index {idx}")
-                continue
-
-            frame = cv2.resize(frame, (640, 360))
-            scored = score_frame(frame, frame_idx=idx)
-            scored_frames.append(scored)
-        except Exception as e:
-            print(f"❌ Error at frame {idx}: {e}")
+        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+        ret, frame = cap.read()
+        if not ret or frame is None:
+            print(f"⚠️ Failed to read frame at index {idx}")
             continue
-
+        frames.append((idx, frame))
     cap.release()
-    return save_scored_thumbnails(scored_frames, output_dir)
 
-    # Top 3 by score, brightness, contrast (no saliency)
+    def process_frame(data):
+        idx, frame = data
+        try:
+            frame = cv2.resize(frame, (640, 360))
+            return score_frame(frame, frame_idx=idx)
+        except Exception as e:
+            print(f"❌ Error processing frame {idx}: {e}")
+            return None
+
+    # Multithreaded scoring
+    scored_frames = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(process_frame, f) for f in frames]
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            if result:
+                scored_frames.append(result)
+
+    if not scored_frames:
+        raise ValueError("❌ No frames were successfully scored.")
+
+    # === Best + Diverse Selection Logic ===
     best_score = max(scored_frames, key=lambda x: x['score'])
     best_brightness = max(scored_frames, key=lambda x: x['components']['brightness'])
     best_contrast = max(scored_frames, key=lambda x: x['components']['contrast'])
     best_sharpness = max(scored_frames, key=lambda x: x['components']['sharpness'])
     chosen = {id(f): f for f in [best_score, best_brightness, best_contrast, best_sharpness]}
 
-    # Additional 4 diverse selections (remove saliency logic)
     diverse_candidates = [f for f in scored_frames if id(f) not in chosen]
     diverse_scores = []
     for f in diverse_candidates:
@@ -318,7 +317,7 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
     diverse_frames = [item[1] for item in diverse_scores[:4]]
     all_selected = list(chosen.values()) + diverse_frames
 
-    print("\n🌟 Final Selected Thumbnails (Top Stats + User-like Diverse):\n")
+    # Save thumbnails
     thumbnails = []
     for i, item in enumerate(all_selected):
         c = item["components"]
