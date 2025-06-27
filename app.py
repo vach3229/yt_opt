@@ -410,15 +410,32 @@ def download_file(filename):
     return send_from_directory(app.config["THUMBNAIL_FOLDER"], filename, as_attachment=True)
 
 
-@app.route("/test-cv2")
-def test_cv2():
+@app.route("/test-one-frame")
+def test_one_frame():
     import cv2
-    try:
-        version = cv2.__version__
-        dummy_image = cv2.imread("nonexistent.jpg")  # Should return None, not crash
-        return f"✅ OpenCV is working! Version: {version}, Dummy Read is None: {dummy_image is None}"
-    except Exception as e:
-        return f"❌ OpenCV test failed: {str(e)}"
+    import numpy as np
+
+    video_path = "video.mp4"  # or wherever you're uploading videos
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return "❌ Failed to open video"
+
+    ret, frame = cap.read()
+    if not ret or frame is None:
+        return "❌ Failed to read first frame"
+
+    frame = cv2.resize(frame, (640, 360))
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    brightness = np.mean(gray)
+    sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
+    contrast = np.std(gray)
+
+    return (
+        f"✅ Success!<br>"
+        f"Brightness: {brightness:.2f}<br>"
+        f"Sharpness: {sharpness:.2f}<br>"
+        f"Contrast: {contrast:.2f}"
+    )
 
 if __name__ == "__main__":
     app.run(debug=True)
