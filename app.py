@@ -6,12 +6,11 @@ from flask import Flask, render_template, request, send_from_directory
 from openai import OpenAI
 from datetime import datetime
 from sklearn.feature_extraction.text import TfidfVectorizer
+import cv2
+import numpy as np
 import uuid
 import argparse
 from werkzeug.utils import secure_filename
-from moviepy.editor import VideoFileClip
-from PIL import Image
-import numpy as np
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "supersecret")
@@ -233,61 +232,83 @@ def generate_natural_language_analysis(channel_name, video_title, video_desc, op
     )
     return res.choices[0].message.content.strip()
 
-def score_frame_array(frame_array):
-    gray = np.mean(frame_array, axis=2)  # approximate grayscale
+def score_frame(frame, frame_idx=None):
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     brightness = np.mean(gray)
+    sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
     contrast = np.std(gray)
-    sharpness = np.var(np.gradient(gray))  # simple approximation
 
     score = 0.5 * sharpness + 0.3 * brightness + 0.2 * contrast
+
     return {
-        "frame": frame_array,
+        "frame": frame,
+        "index": frame_idx,
         "score": score,
         "components": {
+            "sharpness": sharpness,
             "brightness": brightness,
-            "contrast": contrast,
-            "sharpness": sharpness
+            "contrast": contrast
         }
     }
 
 def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to_score=100):
     os.makedirs(output_dir, exist_ok=True)
-    clip = VideoFileClip(video_path)
-    duration = clip.duration
-    timestamps = np.linspace(0, duration, num=num_frames_to_score)
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError(f"Failed to open video file: {video_path}")
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    frame_indices = np.linspace(0, total_frames - 1, num=num_frames_to_score, dtype=int)
+    print(f"⚙️  Sampling {len(frame_indices)} frames from video (first 5 indices: {frame_indices[:5]})")
 
     scored_frames = []
-    print(f"⚙️  Sampling {len(timestamps)} timestamps (first 5: {timestamps[:5]})")
-
-    for t in timestamps:
+    print("\n📊 Scoring frames...\n")
+    for idx in frame_indices:
         try:
-            frame = clip.get_frame(t)  # returns a NumPy RGB array
-            scored = score_frame_array(frame)
-            scored["timestamp"] = t
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                print(f"⚠️ Failed to read frame at index {idx}")
+                continue
+            scored = score_frame(frame, frame_idx=idx)
             scored_frames.append(scored)
         except Exception as e:
-            print(f"❌ Failed at timestamp {t}: {e}")
+            print(f"❌ Error at frame {idx}: {e}")
+            continue
 
-    # Top 4 frames by different attributes
-    best_score = max(scored_frames, key=lambda x: x["score"])
-    best_brightness = max(scored_frames, key=lambda x: x["components"]["brightness"])
-    best_contrast = max(scored_frames, key=lambda x: x["components"]["contrast"])
-    best_sharpness = max(scored_frames, key=lambda x: x["components"]["sharpness"])
+    # Top 3 by score, brightness, contrast (no saliency)
+    best_score = max(scored_frames, key=lambda x: x['score'])
+    best_brightness = max(scored_frames, key=lambda x: x['components']['brightness'])
+    best_contrast = max(scored_frames, key=lambda x: x['components']['contrast'])
+    best_sharpness = max(scored_frames, key=lambda x: x['components']['sharpness'])
     chosen = {id(f): f for f in [best_score, best_brightness, best_contrast, best_sharpness]}
 
-    # Diverse selections
+    # Additional 4 diverse selections (remove saliency logic)
     diverse_candidates = [f for f in scored_frames if id(f) not in chosen]
-    diverse_frames = sorted(diverse_candidates, key=lambda x: -x["score"])[:4]
+    diverse_scores = []
+    for f in diverse_candidates:
+        c = f["components"]
+        score = (
+            0.4 * (np.isclose(c["sharpness"], 30, atol=10)) +
+            0.3 * (c["brightness"] < 120) +
+            0.3 * (c["contrast"] < 55)
+        )
+        diverse_scores.append((score, f))
 
-    final_frames = list(chosen.values()) + diverse_frames
-    print(f"\n🌟 Final Selected Frames: {len(final_frames)}")
+    diverse_scores.sort(key=lambda x: -x[0])
+    diverse_frames = [item[1] for item in diverse_scores[:4]]
+    all_selected = list(chosen.values()) + diverse_frames
 
+    print("\n🌟 Final Selected Thumbnails (Top Stats + User-like Diverse):\n")
     thumbnails = []
-    for i, item in enumerate(final_frames):
-        img = Image.fromarray(item["frame"])
-        filename = f"thumb_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
+    for i, item in enumerate(all_selected):
+        c = item["components"]
+        print(f"Frame {item['index']}: Score={item['score']:.2f} | "
+              f"Sharpness={c['sharpness']:.1f}, Brightness={c['brightness']:.1f}, "
+              f"Contrast={c['contrast']:.1f}")
+        filename = f"custom_frame_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
         filepath = os.path.join(output_dir, filename)
-        img.save(filepath)
+        cv2.imwrite(filepath, item["frame"])
         thumbnails.append(filepath)
 
     return thumbnails

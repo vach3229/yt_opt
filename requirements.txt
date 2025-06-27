@@ -5,6 +5,4 @@ requests
 openai
 numpy
 scikit-learn
-moviepy
-Pillow
-numpy
+opencv-contrib-python-headless
