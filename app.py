@@ -410,6 +410,16 @@ def download_file(filename):
     return send_from_directory(app.config["THUMBNAIL_FOLDER"], filename, as_attachment=True)
 
 
+@app.route("/test-cv2")
+def test_cv2():
+    import cv2
+    try:
+        version = cv2.__version__
+        dummy_image = cv2.imread("nonexistent.jpg")  # Should return None, not crash
+        return f"✅ OpenCV is working! Version: {version}, Dummy Read is None: {dummy_image is None}"
+    except Exception as e:
+        return f"❌ OpenCV test failed: {str(e)}"
+
 if __name__ == "__main__":
     app.run(debug=True)
 
