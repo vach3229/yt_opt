@@ -251,7 +251,7 @@ def score_frame(frame, frame_idx=None):
         }
     }
 
-def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to_score=50):
+def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to_score=10):
     os.makedirs(output_dir, exist_ok=True)
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -259,26 +259,28 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     frame_indices = np.linspace(0, total_frames - 1, num=num_frames_to_score, dtype=int)
-    print(f"⚙️  Sampling {len(frame_indices)} frames from video (first 5 indices: {frame_indices[:5]})")
+    print(f"⚙️ Sampling {len(frame_indices)} frames from video (first 5 indices: {frame_indices[:5]})")
 
     scored_frames = []
     print("\n📊 Scoring frames...\n")
     for idx in frame_indices:
         try:
+            print(f"🔍 Attempting to grab frame at index {idx}/{total_frames}")
             cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
             ret, frame = cap.read()
             if not ret or frame is None:
                 print(f"⚠️ Failed to read frame at index {idx}")
                 continue
 
-            # 🔧 Resize frame here to reduce memory usage and standardize input
-            frame = cv2.resize(frame, (640, 360))  # or (320, 180) if you want even smaller
-
+            frame = cv2.resize(frame, (640, 360))
             scored = score_frame(frame, frame_idx=idx)
             scored_frames.append(scored)
         except Exception as e:
             print(f"❌ Error at frame {idx}: {e}")
             continue
+
+    cap.release()
+    return save_scored_thumbnails(scored_frames, output_dir)
 
     # Top 3 by score, brightness, contrast (no saliency)
     best_score = max(scored_frames, key=lambda x: x['score'])
@@ -390,24 +392,17 @@ def thumbnails():
             upload_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
             video.save(upload_path)
 
-            # 🧪 TEMP: Test reading just the first frame
             try:
-                cap = cv2.VideoCapture(upload_path)
-                ret, frame = cap.read()
-                if ret and frame is not None:
-                    frame = cv2.resize(frame, (640, 360))  # Resize if needed
-                    test_path = os.path.join(THUMBNAIL_FOLDER, "test_frame.jpg")
-                    cv2.imwrite(test_path, frame)
-                    rel_path = os.path.relpath(test_path, "static")
+                scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER)
+                for path in scored_paths:
+                    rel_path = os.path.relpath(path, "static")
                     thumbnails.append({
                         "path": rel_path,
-                        "filename": "test_frame.jpg"
+                        "filename": os.path.basename(path)
                     })
-                    message = "✅ First frame extracted successfully!"
-                else:
-                    message = "❌ Failed to read the first frame."
+                message = "✅ Thumbnails successfully generated!"
             except Exception as e:
-                message = f"❌ Error during frame extraction: {e}"
+                message = f"❌ Error during thumbnail generation: {e}"
 
     return render_template("thumbnails.html", thumbnails=thumbnails, message=message)
 
@@ -416,6 +411,33 @@ def thumbnails():
 def download_file(filename):
     return send_from_directory(app.config["THUMBNAIL_FOLDER"], filename, as_attachment=True)
 
+
+@app.route("/test-one-frame")
+def test_one_frame():
+    import cv2
+    import numpy as np
+
+    video_path = "video2.mp4"  # or wherever you're uploading videos
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return "❌ Failed to open video"
+
+    ret, frame = cap.read()
+    if not ret or frame is None:
+        return "❌ Failed to read first frame"
+
+    frame = cv2.resize(frame, (640, 360))
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    brightness = np.mean(gray)
+    sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
+    contrast = np.std(gray)
+
+    return (
+        f"✅ Success!<br>"
+        f"Brightness: {brightness:.2f}<br>"
+        f"Sharpness: {sharpness:.2f}<br>"
+        f"Contrast: {contrast:.2f}"
+    )
 
 if __name__ == "__main__":
     app.run(debug=True)
