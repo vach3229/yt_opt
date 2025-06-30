@@ -354,7 +354,7 @@ def generate_natural_language_analysis(channel_name, video_title, video_desc, op
 def score_frame(frame, frame_idx=None):
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     brightness = np.mean(gray)
-    sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
+    sharpness = np.abs(np.diff(gray.astype(np.int16), axis=0)).mean()
     contrast = np.std(gray)
 
     score = 0.5 * sharpness + 0.3 * brightness + 0.2 * contrast
@@ -370,45 +370,59 @@ def score_frame(frame, frame_idx=None):
         }
     }
 
-def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to_score=30):
+def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to_score=20):
     os.makedirs(output_dir, exist_ok=True)
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise ValueError(f"Failed to open video file: {video_path}")
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    interval = max(1, total_frames // num_frames_to_score)
-
-    print(f"📼 Total frames: {total_frames}, Sampling every {interval} frames.")
+    frame_indices = np.linspace(0, total_frames - 1, num=num_frames_to_score, dtype=int)
+    frame_indices_set = set(frame_indices)
+    print(f"⚙️ Sampling {len(frame_indices)} frames from video (first 5 indices: {frame_indices[:5]})")
 
     frames = []
-    idx = 0
-    selected = 0
-
-    while cap.isOpened():
+    frame_count = 0
+    while True:
         ret, frame = cap.read()
         if not ret:
             break
-        if idx % interval == 0:
-            try:
-                frame = cv2.resize(frame, (480, 270))  # ⬇️ Smaller frame for performance
-                frames.append((idx, frame))
-                selected += 1
-                if selected >= num_frames_to_score:
-                    break
-            except Exception as e:
-                print(f"❌ Error resizing frame {idx}: {e}")
-        idx += 1
-
+        if frame_count in frame_indices_set:
+            frames.append((frame_count, frame))
+        frame_count += 1
     cap.release()
 
-    # Score all sampled frames
-    scored_frames = [score_frame(frame, idx) for idx, frame in frames]
+    def score_frame(frame, frame_idx=None):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        brightness = np.mean(gray)
+        sharpness = np.abs(np.diff(gray.astype(np.int16), axis=0)).mean()  # faster sharpness
+        contrast = np.std(gray)
+
+        score = 0.5 * sharpness + 0.3 * brightness + 0.2 * contrast
+        return {
+            "frame": frame,
+            "index": frame_idx,
+            "score": score,
+            "components": {
+                "sharpness": sharpness,
+                "brightness": brightness,
+                "contrast": contrast
+            }
+        }
+
+    scored_frames = []
+    for idx, frame in frames:
+        try:
+            frame = cv2.resize(frame, (320, 180))
+            scored = score_frame(frame, frame_idx=idx)
+            scored_frames.append(scored)
+        except Exception as e:
+            print(f"❌ Error scoring frame {idx}: {e}")
 
     if not scored_frames:
         raise ValueError("❌ No frames were successfully scored.")
 
-    # 🎯 Best + Diverse Selection
+    # Best + Diverse Selection
     best_score = max(scored_frames, key=lambda x: x['score'])
     best_brightness = max(scored_frames, key=lambda x: x['components']['brightness'])
     best_contrast = max(scored_frames, key=lambda x: x['components']['contrast'])
@@ -430,7 +444,6 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
     diverse_frames = [item[1] for item in diverse_scores[:4]]
     all_selected = list(chosen.values()) + diverse_frames
 
-    # Save selected thumbnails
     thumbnails = []
     for i, item in enumerate(all_selected):
         c = item["components"]
