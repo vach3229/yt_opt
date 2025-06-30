@@ -457,7 +457,7 @@ def generate_natural_language_analysis(channel_name, video_title, video_desc, op
 
 #     return thumbnails
 
-def extract_thumbnails_seeking(video_path, output_dir="thumbnails"):
+def extract_custom_thumbnails(video_path, output_dir="thumbnails"):
     os.makedirs(output_dir, exist_ok=True)
     cap = cv2.VideoCapture(video_path)
     
