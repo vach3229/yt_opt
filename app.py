@@ -166,37 +166,37 @@ Extra User Context: {user_answers}
             "Include words like: Battle, Ready, Strength, Durable, Tough, Trust, Adrenaline, Tried & True."
         )
     elif "fenwick" in lower_name:
-    brand_voice_note = (
-        "\nThis is a Fenwick-branded channel. Speak with quiet confidence, full-body awareness, and an eye for craftsmanship. Fenwick's voice is self-assured without being loud—it speaks through experience, not hype. Highlight themes like:\n"
-        "- Doing over talking\n"
-        "- Fully engaged senses\n"
-        "- Craftsmanship in every detail\n"
-        "Include words like: Ultimate sensitivity, Intentional, Methodical, Precision, Expert design, Feel the action, Technology meets technique, Palm fit, Finesse, Composed, Distinctive."
-    )
+        brand_voice_note = (
+            "\nThis is a Fenwick-branded channel. Speak with quiet confidence, full-body awareness, and an eye for craftsmanship. Fenwick's voice is self-assured without being loud—it speaks through experience, not hype. Highlight themes like:\n"
+            "- Doing over talking\n"
+            "- Fully engaged senses\n"
+            "- Craftsmanship in every detail\n"
+            "Include words like: Ultimate sensitivity, Intentional, Methodical, Precision, Expert design, Feel the action, Technology meets technique, Palm fit, Finesse, Composed, Distinctive."
+        )
     elif "frabill" in lower_name:
-    brand_voice_note = (
-        "\nThis is a Frabill-branded channel. The tone is focused, direct, and deeply rooted in trust and performance. Frabill messaging is solution-driven, designed to motivate and support serious anglers who expect reliability in the harshest conditions. Highlight themes like:\n"
-        "- Leaning forward with innovation and grit\n"
-        "- Fishing success built on trusted performance\n"
-        "- Speaking plainly but powerfully to the serious angler\n"
-        "Good words to include: Focused, Trusted, Principled, Direct, Certain, Inspiring, Rigid control, Innovative, Performance-driven, Community, Proficiency, Progress."
-    )
+        brand_voice_note = (
+            "\nThis is a Frabill-branded channel. The tone is focused, direct, and deeply rooted in trust and performance. Frabill messaging is solution-driven, designed to motivate and support serious anglers who expect reliability in the harshest conditions. Highlight themes like:\n"
+            "- Leaning forward with innovation and grit\n"
+            "- Fishing success built on trusted performance\n"
+            "- Speaking plainly but powerfully to the serious angler\n"
+            "Good words to include: Focused, Trusted, Principled, Direct, Certain, Inspiring, Rigid control, Innovative, Performance-driven, Community, Proficiency, Progress."
+        )
     elif "plano" in lower_name:
-    brand_voice_note = (
-        "\nThis is a Plano-branded channel. The voice is dependable, no-nonsense, and rooted in preparedness. Plano content should reflect a clear, organized approach to outdoor readiness — focusing on smart storage, intentional gear setup, and trust in long-lasting performance. Highlight themes like:\n"
-        "- Be Plano Ready: Organized gear, prepared mindset\n"
-        "- Purpose-built design for real-world adventure\n"
-        "- Confidence through protection and durability\n"
-        "Good words to include: Ready, Prepared, Gear, Intentional, Purpose-built, Organized, Compartment, Practical, Protect, Access, Adventure."
-    )
+        brand_voice_note = (
+            "\nThis is a Plano-branded channel. The voice is dependable, no-nonsense, and rooted in preparedness. Plano content should reflect a clear, organized approach to outdoor readiness — focusing on smart storage, intentional gear setup, and trust in long-lasting performance. Highlight themes like:\n"
+            "- Be Plano Ready: Organized gear, prepared mindset\n"
+            "- Purpose-built design for real-world adventure\n"
+            "- Confidence through protection and durability\n"
+            "Good words to include: Ready, Prepared, Gear, Intentional, Purpose-built, Organized, Compartment, Practical, Protect, Access, Adventure."
+        )
     elif "shakespeare" in lower_name:
-    brand_voice_note = (
-        "\nThis is a Shakespeare-branded channel. The tone is relaxed, approachable, and full of joy. Shakespeare is all about simple pleasures and getting outside with friends and family. Speak in short, bite-sized sentences. Keep copy easy to follow, fun, and filled with a sense of anticipation and wonder. Highlight themes like:\n"
-        "- Keep it simple, light, and accessible\n"
-        "- Celebrate quality time and making memories outdoors\n"
-        "- Invite everyone to join the adventure — no experience needed\n"
-        "Good words to include: Relax, Easy, Fun, Ready-to-go, Anticipation, Excitement, Smile, Joy, Family, Play, Hang out, Quality time, Trust, Enjoy."
-    )
+        brand_voice_note = (
+            "\nThis is a Shakespeare-branded channel. The tone is relaxed, approachable, and full of joy. Shakespeare is all about simple pleasures and getting outside with friends and family. Speak in short, bite-sized sentences. Keep copy easy to follow, fun, and filled with a sense of anticipation and wonder. Highlight themes like:\n"
+            "- Keep it simple, light, and accessible\n"
+            "- Celebrate quality time and making memories outdoors\n"
+            "- Invite everyone to join the adventure — no experience needed\n"
+            "Good words to include: Relax, Easy, Fun, Ready-to-go, Anticipation, Excitement, Smile, Joy, Family, Play, Hang out, Quality time, Trust, Enjoy."
+        )
 
     prompt = (
         f"{summary_table}\n\n{brand_voice_note}"
