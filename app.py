@@ -11,6 +11,10 @@ import numpy as np
 import uuid
 import argparse
 from werkzeug.utils import secure_filename
+import subprocess
+import json
+import io
+
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "supersecret")
@@ -457,34 +461,174 @@ def generate_natural_language_analysis(channel_name, video_title, video_desc, op
 
 #     return thumbnails
 
-def extract_custom_thumbnails(video_path, output_dir="thumbnails"):
-    os.makedirs(output_dir, exist_ok=True)
-    cap = cv2.VideoCapture(video_path)
+# def extract_custom_thumbnails(video_path, output_dir="thumbnails"):
+#     os.makedirs(output_dir, exist_ok=True)
+#     cap = cv2.VideoCapture(video_path)
     
+#     if not cap.isOpened():
+#         raise ValueError(f"Failed to open video file: {video_path}")
+    
+#     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+#     fps = cap.get(cv2.CAP_PROP_FPS)
+    
+#     thumbnails = []
+#     percentages = [i / 100 for i in range(5, 100, 10)]
+    
+#     for i, percentage in enumerate(percentages):
+#         frame_number = int(percentage * total_frames)
+#         # Seek directly to the frame
+#         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        
+#         ret, frame = cap.read()
+#         if ret:
+#             resized = cv2.resize(frame, (320, 180))
+#             filename = f"thumb_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
+#             filepath = os.path.join(output_dir, filename)
+#             cv2.imwrite(filepath, resized)
+#             thumbnails.append(filepath)
+    
+#     cap.release()
+#     return thumbnails
+
+def extract_thumbnails_ffmpeg(video_path, output_dir="thumbnails", max_width=None):
+    """
+    Ultra-fast thumbnail extraction using FFmpeg - constant time regardless of video length.
+    FFmpeg can seek to exact timestamps without reading through the entire video.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Get video duration using ffprobe (very fast)
+    try:
+        result = subprocess.run([
+            'ffprobe', '-v', 'quiet', '-print_format', 'json', 
+            '-show_format', video_path
+        ], capture_output=True, text=True, check=True)
+        
+        duration = float(json.loads(result.stdout)['format']['duration'])
+    except Exception as e:
+        print(f"Error getting video duration: {e}")
+        # Fallback to OpenCV method
+        return extract_custom_thumbnails_opencv_optimized(video_path, output_dir, max_width)
+    
+    print(f"Video duration: {duration:.2f} seconds")
+    
+    # Calculate timestamps (5%, 15%, 25%, ..., 95%)
+    percentages = [i / 100 for i in range(5, 100, 10)]
+    timestamps = [duration * p for p in percentages]
+    
+    thumbnails = []
+    
+    for i, timestamp in enumerate(timestamps):
+        filename = f"thumb_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
+        filepath = os.path.join(output_dir, filename)
+        
+        # FFmpeg command to extract frame at exact timestamp
+        cmd = [
+            'ffmpeg', '-y',  # -y to overwrite existing files
+            '-ss', str(timestamp),  # Seek to timestamp
+            '-i', video_path,  # Input video
+            '-vframes', '1',  # Extract only 1 frame
+            '-q:v', '2',  # High quality (1-31, lower = better)
+        ]
+        
+        # Add width scaling if specified (maintains aspect ratio)
+        if max_width:
+            cmd.extend(['-vf', f'scale={max_width}:-1'])
+        
+        cmd.append(filepath)  # Output file
+        
+        try:
+            # Run FFmpeg command
+            subprocess.run(cmd, capture_output=True, check=True, timeout=10)
+            thumbnails.append(filepath)
+            print(f"✅ Extracted thumbnail {i+1}/{len(timestamps)} at {timestamp:.2f}s")
+            
+        except subprocess.TimeoutExpired:
+            print(f"⚠️ Timeout extracting frame at {timestamp:.2f}s")
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️ Error extracting frame at {timestamp:.2f}s: {e}")
+    
+    return thumbnails
+
+def extract_custom_thumbnails_opencv_optimized(video_path, output_dir="thumbnails", max_width=None):
+    """
+    Optimized OpenCV version as fallback - uses strategic frame positioning.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise ValueError(f"Failed to open video file: {video_path}")
+    
+    # Set properties for fastest seeking
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS)
     
-    thumbnails = []
-    percentages = [i / 100 for i in range(5, 100, 10)]
+    print(f"Video: {total_frames} frames, {fps:.2f} fps")
     
-    for i, percentage in enumerate(percentages):
-        frame_number = int(percentage * total_frames)
-        # Seek directly to the frame
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+    # Calculate target frames
+    percentages = [i / 100 for i in range(5, 100, 10)]
+    target_frames = [int(p * total_frames) for p in percentages]
+    
+    thumbnails = []
+    
+    for i, frame_num in enumerate(target_frames):
+        # Use timestamp-based seeking for better accuracy
+        timestamp_ms = (frame_num / fps) * 1000
+        cap.set(cv2.CAP_PROP_POS_MSEC, timestamp_ms)
         
         ret, frame = cap.read()
-        if ret:
-            resized = cv2.resize(frame, (320, 180))
-            filename = f"thumb_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
-            filepath = os.path.join(output_dir, filename)
-            cv2.imwrite(filepath, resized)
-            thumbnails.append(filepath)
+        if not ret:
+            print(f"⚠️ Could not read frame {frame_num}")
+            continue
+        
+        # Resize if max_width specified
+        if max_width:
+            height, width = frame.shape[:2]
+            if width > max_width:
+                scale = max_width / width
+                new_height = int(height * scale)
+                frame = cv2.resize(frame, (max_width, new_height), interpolation=cv2.INTER_LANCZOS4)
+        
+        filename = f"thumb_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
+        filepath = os.path.join(output_dir, filename)
+        
+        # High quality JPEG
+        cv2.imwrite(filepath, frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        thumbnails.append(filepath)
+        
+        print(f"✅ Extracted thumbnail {i+1}/{len(target_frames)}")
     
     cap.release()
     return thumbnails
+
+def check_ffmpeg_available():
+    """Check if FFmpeg is available on the system."""
+    try:
+        subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+def extract_custom_thumbnails(video_path, output_dir="thumbnails", max_width=None):
+    """
+    Main function that chooses the best extraction method.
+    Defaults to FFmpeg for speed, falls back to OpenCV.
+    """
+    print("🎬 Starting thumbnail extraction...")
+    
+    if check_ffmpeg_available():
+        print("✅ Using FFmpeg for ultra-fast extraction")
+        try:
+            return extract_thumbnails_ffmpeg(video_path, output_dir, max_width)
+        except Exception as e:
+            print(f"⚠️ FFmpeg failed, falling back to OpenCV: {e}")
+            return extract_custom_thumbnails_opencv_optimized(video_path, output_dir, max_width)
+    else:
+        print("⚠️ FFmpeg not available, using optimized OpenCV")
+        return extract_custom_thumbnails_opencv_optimized(video_path, output_dir, max_width)
 
 def clean_directories(*dirs):
     for d in dirs:
@@ -544,35 +688,77 @@ def description():
         return "An error occurred", 500
     
     
+# @app.route("/thumbnails", methods=["GET", "POST"])
+# def thumbnails():
+#     thumbnails = []
+#     message = ""
+
+#     if request.method == "POST":
+#         # 🧹 Clean previous uploads and thumbnails
+#         clean_directories(app.config["UPLOAD_FOLDER"], THUMBNAIL_FOLDER)
+
+#         video = request.files.get("video")
+#         if video and video.filename.endswith((".mp4", ".mov", ".avi", ".mkv")):
+#             filename = secure_filename(video.filename)
+#             upload_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+#             video.save(upload_path)
+#             print("✅ Video upload saved to disk.")
+
+#             try:
+#                 scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER)
+#                 for path in scored_paths:
+#                     rel_path = os.path.relpath(path, "static")
+#                     thumbnails.append({
+#                         "path": rel_path,
+#                         "filename": os.path.basename(path)
+#                     })
+#                 message = "✅ Thumbnails successfully generated!"
+#             except Exception as e:
+#                 message = f"❌ Error during thumbnail generation: {e}"
+
+#     return render_template("thumbnails.html", thumbnails=thumbnails, message=message)
+
 @app.route("/thumbnails", methods=["GET", "POST"])
 def thumbnails():
     thumbnails = []
     message = ""
-
+    
     if request.method == "POST":
-        # 🧹 Clean previous uploads and thumbnails
+        # Clean previous uploads and thumbnails
         clean_directories(app.config["UPLOAD_FOLDER"], THUMBNAIL_FOLDER)
-
+        
         video = request.files.get("video")
         if video and video.filename.endswith((".mp4", ".mov", ".avi", ".mkv")):
             filename = secure_filename(video.filename)
             upload_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
             video.save(upload_path)
             print("✅ Video upload saved to disk.")
-
+            
             try:
+                # Extract thumbnails - should be constant time!
+                # Full resolution:
                 scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER)
+                
+                # Or with width limit (maintains aspect ratio):
+                # scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER, max_width=1920)
+                
                 for path in scored_paths:
                     rel_path = os.path.relpath(path, "static")
                     thumbnails.append({
                         "path": rel_path,
                         "filename": os.path.basename(path)
                     })
-                message = "✅ Thumbnails successfully generated!"
+                
+                message = f"✅ {len(scored_paths)} thumbnails generated successfully!"
+                
             except Exception as e:
                 message = f"❌ Error during thumbnail generation: {e}"
-
+                print(f"Error details: {e}")
+        else:
+            message = "❌ Please upload a valid video file"
+    
     return render_template("thumbnails.html", thumbnails=thumbnails, message=message)
+
 
 
 @app.route("/download/<filename>")
