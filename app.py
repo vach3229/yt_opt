@@ -11,7 +11,7 @@ import numpy as np
 import uuid
 import argparse
 from werkzeug.utils import secure_filename
-from concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "supersecret")
