@@ -919,43 +919,6 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", max_width=Non
         print(f"❌ Both methods failed: {e}")
         raise
 
-# Updated Flask route with better error reporting
-@app.route("/thumbnails", methods=["GET", "POST"])
-def thumbnails():
-    thumbnails = []
-    message = ""
-    
-    if request.method == "POST":
-        clean_directories(app.config["UPLOAD_FOLDER"], THUMBNAIL_FOLDER)
-        
-        video = request.files.get("video")
-        if video and video.filename.endswith((".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm")):
-            filename = secure_filename(video.filename)
-            upload_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-            video.save(upload_path)
-            print(f"✅ Video saved: {filename}")
-            
-            try:
-                scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER)
-                
-                for path in scored_paths:
-                    rel_path = os.path.relpath(path, "static")
-                    thumbnails.append({
-                        "path": rel_path,
-                        "filename": os.path.basename(path)
-                    })
-                
-                message = f"✅ {len(scored_paths)} thumbnails generated successfully!"
-                
-            except Exception as e:
-                message = f"❌ Error: {str(e)}"
-                print(f"💥 Full error details: {e}")
-                import traceback
-                traceback.print_exc()
-        else:
-            message = "❌ Please upload a valid video file"
-    
-    return render_template("thumbnails.html", thumbnails=thumbnails, message=message)
 
 def clean_directories(*dirs):
     for d in dirs:
@@ -1045,29 +1008,65 @@ def description():
 
 #     return render_template("thumbnails.html", thumbnails=thumbnails, message=message)
 
+# @app.route("/thumbnails", methods=["GET", "POST"])
+# def thumbnails():
+#     thumbnails = []
+#     message = ""
+    
+#     if request.method == "POST":
+#         # Clean previous uploads and thumbnails
+#         clean_directories(app.config["UPLOAD_FOLDER"], THUMBNAIL_FOLDER)
+        
+#         video = request.files.get("video")
+#         if video and video.filename.endswith((".mp4", ".mov", ".avi", ".mkv")):
+#             filename = secure_filename(video.filename)
+#             upload_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+#             video.save(upload_path)
+#             print("✅ Video upload saved to disk.")
+            
+#             try:
+#                 # Extract thumbnails - should be constant time!
+#                 # Full resolution:
+#                 scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER)
+                
+#                 # Or with width limit (maintains aspect ratio):
+#                 # scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER, max_width=1920)
+                
+#                 for path in scored_paths:
+#                     rel_path = os.path.relpath(path, "static")
+#                     thumbnails.append({
+#                         "path": rel_path,
+#                         "filename": os.path.basename(path)
+#                     })
+                
+#                 message = f"✅ {len(scored_paths)} thumbnails generated successfully!"
+                
+#             except Exception as e:
+#                 message = f"❌ Error during thumbnail generation: {e}"
+#                 print(f"Error details: {e}")
+#         else:
+#             message = "❌ Please upload a valid video file"
+    
+#     return render_template("thumbnails.html", thumbnails=thumbnails, message=message)
+
+# Updated Flask route with better error reporting
 @app.route("/thumbnails", methods=["GET", "POST"])
 def thumbnails():
     thumbnails = []
     message = ""
     
     if request.method == "POST":
-        # Clean previous uploads and thumbnails
         clean_directories(app.config["UPLOAD_FOLDER"], THUMBNAIL_FOLDER)
         
         video = request.files.get("video")
-        if video and video.filename.endswith((".mp4", ".mov", ".avi", ".mkv")):
+        if video and video.filename.endswith((".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm")):
             filename = secure_filename(video.filename)
             upload_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
             video.save(upload_path)
-            print("✅ Video upload saved to disk.")
+            print(f"✅ Video saved: {filename}")
             
             try:
-                # Extract thumbnails - should be constant time!
-                # Full resolution:
                 scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER)
-                
-                # Or with width limit (maintains aspect ratio):
-                # scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER, max_width=1920)
                 
                 for path in scored_paths:
                     rel_path = os.path.relpath(path, "static")
@@ -1079,12 +1078,15 @@ def thumbnails():
                 message = f"✅ {len(scored_paths)} thumbnails generated successfully!"
                 
             except Exception as e:
-                message = f"❌ Error during thumbnail generation: {e}"
-                print(f"Error details: {e}")
+                message = f"❌ Error: {str(e)}"
+                print(f"💥 Full error details: {e}")
+                import traceback
+                traceback.print_exc()
         else:
             message = "❌ Please upload a valid video file"
     
     return render_template("thumbnails.html", thumbnails=thumbnails, message=message)
+
 
 
 
