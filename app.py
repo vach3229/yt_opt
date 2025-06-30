@@ -14,7 +14,7 @@ from werkzeug.utils import secure_filename
 import subprocess
 import json
 import io
-
+import time
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "supersecret")
@@ -521,30 +521,209 @@ def generate_natural_language_analysis(channel_name, video_title, video_desc, op
     
 #     cap.release()
 #     return thumbnails
+# ////
+# def extract_thumbnails_ffmpeg(video_path, output_dir="thumbnails", max_width=None):
+#     """
+#     Ultra-fast thumbnail extraction using FFmpeg - constant time regardless of video length.
+#     FFmpeg can seek to exact timestamps without reading through the entire video.
+#     """
+#     os.makedirs(output_dir, exist_ok=True)
+    
+#     # Get video duration using ffprobe (very fast)
+#     try:
+#         result = subprocess.run([
+#             'ffprobe', '-v', 'quiet', '-print_format', 'json', 
+#             '-show_format', video_path
+#         ], capture_output=True, text=True, check=True)
+        
+#         duration = float(json.loads(result.stdout)['format']['duration'])
+#     except Exception as e:
+#         print(f"Error getting video duration: {e}")
+#         # Fallback to OpenCV method
+#         return extract_custom_thumbnails_opencv_optimized(video_path, output_dir, max_width)
+    
+#     print(f"Video duration: {duration:.2f} seconds")
+    
+#     # Calculate timestamps (5%, 15%, 25%, ..., 95%)
+#     percentages = [i / 100 for i in range(5, 100, 10)]
+#     timestamps = [duration * p for p in percentages]
+    
+#     thumbnails = []
+    
+#     for i, timestamp in enumerate(timestamps):
+#         filename = f"thumb_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
+#         filepath = os.path.join(output_dir, filename)
+        
+#         # FFmpeg command to extract frame at exact timestamp
+#         cmd = [
+#             'ffmpeg', '-y',  # -y to overwrite existing files
+#             '-ss', str(timestamp),  # Seek to timestamp
+#             '-i', video_path,  # Input video
+#             '-vframes', '1',  # Extract only 1 frame
+#             '-q:v', '2',  # High quality (1-31, lower = better)
+#         ]
+        
+#         # Add width scaling if specified (maintains aspect ratio)
+#         if max_width:
+#             cmd.extend(['-vf', f'scale={max_width}:-1'])
+        
+#         cmd.append(filepath)  # Output file
+        
+#         try:
+#             # Run FFmpeg command
+#             subprocess.run(cmd, capture_output=True, check=True, timeout=10)
+#             thumbnails.append(filepath)
+#             print(f"✅ Extracted thumbnail {i+1}/{len(timestamps)} at {timestamp:.2f}s")
+            
+#         except subprocess.TimeoutExpired:
+#             print(f"⚠️ Timeout extracting frame at {timestamp:.2f}s")
+#         except subprocess.CalledProcessError as e:
+#             print(f"⚠️ Error extracting frame at {timestamp:.2f}s: {e}")
+    
+#     return thumbnails
 
-def extract_thumbnails_ffmpeg(video_path, output_dir="thumbnails", max_width=None):
+# def extract_custom_thumbnails_opencv_optimized(video_path, output_dir="thumbnails", max_width=None):
+#     """
+#     Optimized OpenCV version as fallback - uses strategic frame positioning.
+#     """
+#     os.makedirs(output_dir, exist_ok=True)
+    
+#     cap = cv2.VideoCapture(video_path)
+#     if not cap.isOpened():
+#         raise ValueError(f"Failed to open video file: {video_path}")
+    
+#     # Set properties for fastest seeking
+#     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    
+#     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+#     fps = cap.get(cv2.CAP_PROP_FPS)
+    
+#     print(f"Video: {total_frames} frames, {fps:.2f} fps")
+    
+#     # Calculate target frames
+#     percentages = [i / 100 for i in range(5, 100, 10)]
+#     target_frames = [int(p * total_frames) for p in percentages]
+    
+#     thumbnails = []
+    
+#     for i, frame_num in enumerate(target_frames):
+#         # Use timestamp-based seeking for better accuracy
+#         timestamp_ms = (frame_num / fps) * 1000
+#         cap.set(cv2.CAP_PROP_POS_MSEC, timestamp_ms)
+        
+#         ret, frame = cap.read()
+#         if not ret:
+#             print(f"⚠️ Could not read frame {frame_num}")
+#             continue
+        
+#         # Resize if max_width specified
+#         if max_width:
+#             height, width = frame.shape[:2]
+#             if width > max_width:
+#                 scale = max_width / width
+#                 new_height = int(height * scale)
+#                 frame = cv2.resize(frame, (max_width, new_height), interpolation=cv2.INTER_LANCZOS4)
+        
+#         filename = f"thumb_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
+#         filepath = os.path.join(output_dir, filename)
+        
+#         # High quality JPEG
+#         cv2.imwrite(filepath, frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+#         thumbnails.append(filepath)
+        
+#         print(f"✅ Extracted thumbnail {i+1}/{len(target_frames)}")
+    
+#     cap.release()
+#     return thumbnails
+
+# def check_ffmpeg_available():
+#     """Check if FFmpeg is available on the system."""
+#     try:
+#         subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+#         return True
+#     except (subprocess.CalledProcessError, FileNotFoundError):
+#         return False
+
+# def extract_custom_thumbnails(video_path, output_dir="thumbnails", max_width=None):
+#     """
+#     Main function that chooses the best extraction method.
+#     Defaults to FFmpeg for speed, falls back to OpenCV.
+#     """
+#     print("🎬 Starting thumbnail extraction...")
+    
+#     if check_ffmpeg_available():
+#         print("✅ Using FFmpeg for ultra-fast extraction")
+#         try:
+#             return extract_thumbnails_ffmpeg(video_path, output_dir, max_width)
+#         except Exception as e:
+#             print(f"⚠️ FFmpeg failed, falling back to OpenCV: {e}")
+#             return extract_custom_thumbnails_opencv_optimized(video_path, output_dir, max_width)
+#     else:
+#         print("⚠️ FFmpeg not available, using optimized OpenCV")
+#         return extract_custom_thumbnails_opencv_optimized(video_path, output_dir, max_width)
+#////
+def get_video_info(video_path):
+    """Get comprehensive video information for debugging."""
+    try:
+        # Use ffprobe to get detailed video info
+        result = subprocess.run([
+            'ffprobe', '-v', 'quiet', '-print_format', 'json',
+            '-show_format', '-show_streams', video_path
+        ], capture_output=True, text=True, check=True, timeout=30)
+        
+        data = json.loads(result.stdout)
+        
+        # Extract video stream info
+        video_stream = None
+        for stream in data.get('streams', []):
+            if stream.get('codec_type') == 'video':
+                video_stream = stream
+                break
+        
+        if not video_stream:
+            raise ValueError("No video stream found")
+        
+        info = {
+            'duration': float(data['format'].get('duration', 0)),
+            'size': int(data['format'].get('size', 0)),
+            'codec': video_stream.get('codec_name', 'unknown'),
+            'width': int(video_stream.get('width', 0)),
+            'height': int(video_stream.get('height', 0)),
+            'fps': eval(video_stream.get('r_frame_rate', '0/1')),  # Convert fraction to float
+            'bitrate': int(data['format'].get('bit_rate', 0))
+        }
+        
+        print(f"📹 Video Info:")
+        print(f"   Duration: {info['duration']:.2f}s")
+        print(f"   Size: {info['size'] / (1024*1024):.1f} MB")
+        print(f"   Codec: {info['codec']}")
+        print(f"   Resolution: {info['width']}x{info['height']}")
+        print(f"   FPS: {info['fps']:.2f}")
+        print(f"   Bitrate: {info['bitrate'] / 1000:.0f} kbps")
+        
+        return info
+        
+    except Exception as e:
+        print(f"⚠️ Error getting video info: {e}")
+        return None
+
+def extract_thumbnails_ffmpeg_robust(video_path, output_dir="thumbnails", max_width=None):
     """
-    Ultra-fast thumbnail extraction using FFmpeg - constant time regardless of video length.
-    FFmpeg can seek to exact timestamps without reading through the entire video.
+    Robust FFmpeg extraction with better error handling and codec compatibility.
     """
     os.makedirs(output_dir, exist_ok=True)
     
-    # Get video duration using ffprobe (very fast)
-    try:
-        result = subprocess.run([
-            'ffprobe', '-v', 'quiet', '-print_format', 'json', 
-            '-show_format', video_path
-        ], capture_output=True, text=True, check=True)
-        
-        duration = float(json.loads(result.stdout)['format']['duration'])
-    except Exception as e:
-        print(f"Error getting video duration: {e}")
-        # Fallback to OpenCV method
+    # Get video info first
+    video_info = get_video_info(video_path)
+    if not video_info:
+        print("❌ Could not get video info, falling back to OpenCV")
         return extract_custom_thumbnails_opencv_optimized(video_path, output_dir, max_width)
     
-    print(f"Video duration: {duration:.2f} seconds")
+    duration = video_info['duration']
+    if duration <= 0:
+        raise ValueError("Invalid video duration")
     
-    # Calculate timestamps (5%, 15%, 25%, ..., 95%)
+    # Calculate timestamps
     percentages = [i / 100 for i in range(5, 100, 10)]
     timestamps = [duration * p for p in percentages]
     
@@ -554,113 +733,229 @@ def extract_thumbnails_ffmpeg(video_path, output_dir="thumbnails", max_width=Non
         filename = f"thumb_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
         filepath = os.path.join(output_dir, filename)
         
-        # FFmpeg command to extract frame at exact timestamp
+        # Build FFmpeg command with better compatibility
         cmd = [
-            'ffmpeg', '-y',  # -y to overwrite existing files
+            'ffmpeg', '-y',
             '-ss', str(timestamp),  # Seek to timestamp
-            '-i', video_path,  # Input video
-            '-vframes', '1',  # Extract only 1 frame
-            '-q:v', '2',  # High quality (1-31, lower = better)
+            '-i', video_path,
+            '-vframes', '1',
+            '-f', 'image2',  # Force image format
+            '-q:v', '2',  # High quality
         ]
         
-        # Add width scaling if specified (maintains aspect ratio)
+        # Add scaling if needed
         if max_width:
             cmd.extend(['-vf', f'scale={max_width}:-1'])
         
-        cmd.append(filepath)  # Output file
+        # Handle problematic codecs
+        if video_info['codec'] in ['hevc', 'h265', 'vp9', 'av1']:
+            cmd.extend(['-c:v', 'libx264'])  # Re-encode with compatible codec
+        
+        cmd.append(filepath)
         
         try:
-            # Run FFmpeg command
-            subprocess.run(cmd, capture_output=True, check=True, timeout=10)
-            thumbnails.append(filepath)
-            print(f"✅ Extracted thumbnail {i+1}/{len(timestamps)} at {timestamp:.2f}s")
+            print(f"🎬 Extracting frame {i+1}/{len(timestamps)} at {timestamp:.2f}s...")
             
+            start_time = time.time()
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True,
+                check=True, 
+                timeout=30  # Increased timeout for high-quality videos
+            )
+            
+            extraction_time = time.time() - start_time
+            
+            if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+                thumbnails.append(filepath)
+                print(f"✅ Frame {i+1} extracted in {extraction_time:.2f}s")
+            else:
+                print(f"⚠️ Frame {i+1} extraction failed - empty file")
+                
         except subprocess.TimeoutExpired:
-            print(f"⚠️ Timeout extracting frame at {timestamp:.2f}s")
+            print(f"⏰ Timeout extracting frame {i+1} at {timestamp:.2f}s")
         except subprocess.CalledProcessError as e:
-            print(f"⚠️ Error extracting frame at {timestamp:.2f}s: {e}")
+            print(f"❌ FFmpeg error for frame {i+1}: {e.stderr}")
+            print(f"   Command: {' '.join(cmd)}")
     
     return thumbnails
 
 def extract_custom_thumbnails_opencv_optimized(video_path, output_dir="thumbnails", max_width=None):
     """
-    Optimized OpenCV version as fallback - uses strategic frame positioning.
+    Optimized OpenCV version with better error handling.
     """
     os.makedirs(output_dir, exist_ok=True)
+    
+    print("🔄 Using OpenCV method...")
     
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise ValueError(f"Failed to open video file: {video_path}")
     
-    # Set properties for fastest seeking
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    
+    # Get video properties
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS)
+    duration = total_frames / fps if fps > 0 else 0
     
-    print(f"Video: {total_frames} frames, {fps:.2f} fps")
+    print(f"📹 OpenCV Video Info:")
+    print(f"   Frames: {total_frames}")
+    print(f"   FPS: {fps:.2f}")
+    print(f"   Duration: {duration:.2f}s")
+    
+    if total_frames <= 0 or fps <= 0:
+        raise ValueError("Invalid video properties")
+    
+    # Set buffer size
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     
     # Calculate target frames
     percentages = [i / 100 for i in range(5, 100, 10)]
-    target_frames = [int(p * total_frames) for p in percentages]
+    target_frames = [max(0, min(int(p * total_frames), total_frames - 1)) for p in percentages]
     
     thumbnails = []
     
     for i, frame_num in enumerate(target_frames):
-        # Use timestamp-based seeking for better accuracy
-        timestamp_ms = (frame_num / fps) * 1000
-        cap.set(cv2.CAP_PROP_POS_MSEC, timestamp_ms)
-        
-        ret, frame = cap.read()
-        if not ret:
-            print(f"⚠️ Could not read frame {frame_num}")
+        try:
+            print(f"🎬 Seeking to frame {frame_num} ({i+1}/{len(target_frames)})...")
+            
+            # Try multiple seeking methods
+            success = False
+            
+            # Method 1: Frame-based seeking
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
+            ret, frame = cap.read()
+            
+            if ret and frame is not None:
+                success = True
+            else:
+                # Method 2: Time-based seeking
+                timestamp_ms = (frame_num / fps) * 1000
+                cap.set(cv2.CAP_PROP_POS_MSEC, timestamp_ms)
+                ret, frame = cap.read()
+                
+                if ret and frame is not None:
+                    success = True
+            
+            if not success:
+                print(f"⚠️ Could not read frame {frame_num}")
+                continue
+            
+            # Resize if needed
+            if max_width:
+                height, width = frame.shape[:2]
+                if width > max_width:
+                    scale = max_width / width
+                    new_height = int(height * scale)
+                    frame = cv2.resize(frame, (max_width, new_height), interpolation=cv2.INTER_LANCZOS4)
+            
+            filename = f"thumb_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
+            filepath = os.path.join(output_dir, filename)
+            
+            # Save with high quality
+            success = cv2.imwrite(filepath, frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            
+            if success and os.path.exists(filepath):
+                thumbnails.append(filepath)
+                print(f"✅ Frame {i+1} saved successfully")
+            else:
+                print(f"⚠️ Failed to save frame {i+1}")
+                
+        except Exception as e:
+            print(f"❌ Error processing frame {i+1}: {e}")
             continue
-        
-        # Resize if max_width specified
-        if max_width:
-            height, width = frame.shape[:2]
-            if width > max_width:
-                scale = max_width / width
-                new_height = int(height * scale)
-                frame = cv2.resize(frame, (max_width, new_height), interpolation=cv2.INTER_LANCZOS4)
-        
-        filename = f"thumb_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
-        filepath = os.path.join(output_dir, filename)
-        
-        # High quality JPEG
-        cv2.imwrite(filepath, frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
-        thumbnails.append(filepath)
-        
-        print(f"✅ Extracted thumbnail {i+1}/{len(target_frames)}")
     
     cap.release()
     return thumbnails
 
 def check_ffmpeg_available():
-    """Check if FFmpeg is available on the system."""
+    """Check if FFmpeg is available and get version info."""
     try:
-        subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+        result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, check=True)
+        version_line = result.stdout.split('\n')[0]
+        print(f"✅ FFmpeg available: {version_line}")
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
+        print("⚠️ FFmpeg not available")
         return False
 
 def extract_custom_thumbnails(video_path, output_dir="thumbnails", max_width=None):
     """
-    Main function that chooses the best extraction method.
-    Defaults to FFmpeg for speed, falls back to OpenCV.
+    Main function with comprehensive error handling and diagnostics.
     """
-    print("🎬 Starting thumbnail extraction...")
+    print(f"🎬 Starting thumbnail extraction for: {os.path.basename(video_path)}")
+    print(f"📁 Output directory: {output_dir}")
+    
+    # Check file exists and is readable
+    if not os.path.exists(video_path):
+        raise FileNotFoundError(f"Video file not found: {video_path}")
+    
+    file_size = os.path.getsize(video_path)
+    print(f"📊 File size: {file_size / (1024*1024):.1f} MB")
+    
+    if file_size == 0:
+        raise ValueError("Video file is empty")
+    
+    start_time = time.time()
     
     if check_ffmpeg_available():
-        print("✅ Using FFmpeg for ultra-fast extraction")
         try:
-            return extract_thumbnails_ffmpeg(video_path, output_dir, max_width)
+            thumbnails = extract_thumbnails_ffmpeg_robust(video_path, output_dir, max_width)
+            if thumbnails:
+                total_time = time.time() - start_time
+                print(f"🎉 FFmpeg extraction completed in {total_time:.2f}s")
+                return thumbnails
         except Exception as e:
-            print(f"⚠️ FFmpeg failed, falling back to OpenCV: {e}")
-            return extract_custom_thumbnails_opencv_optimized(video_path, output_dir, max_width)
-    else:
-        print("⚠️ FFmpeg not available, using optimized OpenCV")
-        return extract_custom_thumbnails_opencv_optimized(video_path, output_dir, max_width)
+            print(f"⚠️ FFmpeg failed: {e}")
+            print("🔄 Falling back to OpenCV...")
+    
+    # Fallback to OpenCV
+    try:
+        thumbnails = extract_custom_thumbnails_opencv_optimized(video_path, output_dir, max_width)
+        total_time = time.time() - start_time
+        print(f"🎉 OpenCV extraction completed in {total_time:.2f}s")
+        return thumbnails
+    except Exception as e:
+        print(f"❌ Both methods failed: {e}")
+        raise
+
+# Updated Flask route with better error reporting
+@app.route("/thumbnails", methods=["GET", "POST"])
+def thumbnails():
+    thumbnails = []
+    message = ""
+    
+    if request.method == "POST":
+        clean_directories(app.config["UPLOAD_FOLDER"], THUMBNAIL_FOLDER)
+        
+        video = request.files.get("video")
+        if video and video.filename.endswith((".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm")):
+            filename = secure_filename(video.filename)
+            upload_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            video.save(upload_path)
+            print(f"✅ Video saved: {filename}")
+            
+            try:
+                scored_paths = extract_custom_thumbnails(upload_path, output_dir=THUMBNAIL_FOLDER)
+                
+                for path in scored_paths:
+                    rel_path = os.path.relpath(path, "static")
+                    thumbnails.append({
+                        "path": rel_path,
+                        "filename": os.path.basename(path)
+                    })
+                
+                message = f"✅ {len(scored_paths)} thumbnails generated successfully!"
+                
+            except Exception as e:
+                message = f"❌ Error: {str(e)}"
+                print(f"💥 Full error details: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            message = "❌ Please upload a valid video file"
+    
+    return render_template("thumbnails.html", thumbnails=thumbnails, message=message)
 
 def clean_directories(*dirs):
     for d in dirs:
