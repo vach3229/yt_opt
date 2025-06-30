@@ -457,47 +457,34 @@ def generate_natural_language_analysis(channel_name, video_title, video_desc, op
 
 #     return thumbnails
 
-def extract_custom_thumbnails(video_path, output_dir="thumbnails"):
+def extract_thumbnails_seeking(video_path, output_dir="thumbnails"):
     os.makedirs(output_dir, exist_ok=True)
     cap = cv2.VideoCapture(video_path)
+    
     if not cap.isOpened():
         raise ValueError(f"Failed to open video file: {video_path}")
-
+    
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    if total_frames == 0:
-        raise ValueError("❌ Video has zero frames.")
-
-    # Get 10 frame indices at 5%, 15%, ..., 95%
-    percentages = [i / 100 for i in range(5, 100, 10)]
-    frame_indices = [int(p * total_frames) for p in percentages]
-    frame_indices_set = set(frame_indices)
-
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    
     thumbnails = []
-    frame_count = 0
-    saved_count = 0
-
-    while True:
+    percentages = [i / 100 for i in range(5, 100, 10)]
+    
+    for i, percentage in enumerate(percentages):
+        frame_number = int(percentage * total_frames)
+        # Seek directly to the frame
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        
         ret, frame = cap.read()
-        if not ret:
-            break
-        if frame_count in frame_indices_set:
+        if ret:
             resized = cv2.resize(frame, (320, 180))
-            filename = f"thumb_{saved_count+1}_{uuid.uuid4().hex[:6]}.jpg"
+            filename = f"thumb_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
             filepath = os.path.join(output_dir, filename)
             cv2.imwrite(filepath, resized)
             thumbnails.append(filepath)
-            saved_count += 1
-            if saved_count >= 10:
-                break
-        frame_count += 1
-
+    
     cap.release()
-
-    if not thumbnails:
-        raise ValueError("❌ No thumbnails were generated.")
-
     return thumbnails
-
 
 def clean_directories(*dirs):
     for d in dirs:
