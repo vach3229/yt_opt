@@ -11,7 +11,6 @@ import numpy as np
 import uuid
 import argparse
 from werkzeug.utils import secure_filename
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "supersecret")
@@ -233,6 +232,125 @@ def generate_natural_language_analysis(channel_name, video_title, video_desc, op
     )
     return res.choices[0].message.content.strip()
 
+# def score_frame(frame, frame_idx=None):
+#     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+#     brightness = np.mean(gray)
+#     sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
+#     contrast = np.std(gray)
+
+#     score = 0.5 * sharpness + 0.3 * brightness + 0.2 * contrast
+
+#     return {
+#         "frame": frame,
+#         "index": frame_idx,
+#         "score": score,
+#         "components": {
+#             "sharpness": sharpness,
+#             "brightness": brightness,
+#             "contrast": contrast
+#         }
+#     }
+
+
+# def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to_score=30):
+#     os.makedirs(output_dir, exist_ok=True)
+#     cap = cv2.VideoCapture(video_path)
+#     if not cap.isOpened():
+#         raise ValueError(f"Failed to open video file: {video_path}")
+
+#     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+#     frame_indices = np.linspace(0, total_frames - 1, num=num_frames_to_score, dtype=int)
+#     print(f"⚙️ Sampling {len(frame_indices)} frames from video (first 5 indices: {frame_indices[:5]})")
+
+#     # ✅ Preload frames into memory (before threading)
+#     frames = []
+#     for idx in frame_indices:
+#         print(f"🔍 Attempting to grab frame at index {idx}/{total_frames}")
+#         cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+#         ret, frame = cap.read()
+#         if not ret or frame is None:
+#             print(f"⚠️ Failed to read frame at index {idx}")
+#             continue
+#         frames.append((idx, frame))
+#     cap.release()
+
+#     # 🧠 Define scoring logic
+#     def score_frame(frame, frame_idx=None):
+#         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+#         brightness = np.mean(gray)
+#         sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
+#         contrast = np.std(gray)
+
+#         score = 0.5 * sharpness + 0.3 * brightness + 0.2 * contrast
+
+#         return {
+#             "frame": frame,
+#             "index": frame_idx,
+#             "score": score,
+#             "components": {
+#                 "sharpness": sharpness,
+#                 "brightness": brightness,
+#                 "contrast": contrast
+#             }
+#         }
+
+#     # ⚡ Multithreaded scoring
+#     def process_frame(data):
+#         idx, frame = data
+#         try:
+#             frame = cv2.resize(frame, (640, 360))
+#             return score_frame(frame, frame_idx=idx)
+#         except Exception as e:
+#             print(f"❌ Error processing frame {idx}: {e}")
+#             return None
+
+#     scored_frames = []
+#     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+#         futures = [executor.submit(process_frame, f) for f in frames]
+#         for future in concurrent.futures.as_completed(futures):
+#             result = future.result()
+#             if result:
+#                 scored_frames.append(result)
+
+#     if not scored_frames:
+#         raise ValueError("❌ No frames were successfully scored.")
+
+#     # 🎯 Best + Diverse Selection
+#     best_score = max(scored_frames, key=lambda x: x['score'])
+#     best_brightness = max(scored_frames, key=lambda x: x['components']['brightness'])
+#     best_contrast = max(scored_frames, key=lambda x: x['components']['contrast'])
+#     best_sharpness = max(scored_frames, key=lambda x: x['components']['sharpness'])
+#     chosen = {id(f): f for f in [best_score, best_brightness, best_contrast, best_sharpness]}
+
+#     diverse_candidates = [f for f in scored_frames if id(f) not in chosen]
+#     diverse_scores = []
+#     for f in diverse_candidates:
+#         c = f["components"]
+#         score = (
+#             0.4 * (np.isclose(c["sharpness"], 30, atol=10)) +
+#             0.3 * (c["brightness"] < 120) +
+#             0.3 * (c["contrast"] < 55)
+#         )
+#         diverse_scores.append((score, f))
+
+#     diverse_scores.sort(key=lambda x: -x[0])
+#     diverse_frames = [item[1] for item in diverse_scores[:4]]
+#     all_selected = list(chosen.values()) + diverse_frames
+
+#     # 💾 Save selected thumbnails
+#     thumbnails = []
+#     for i, item in enumerate(all_selected):
+#         c = item["components"]
+#         print(f"Frame {item['index']}: Score={item['score']:.2f} | "
+#               f"Sharpness={c['sharpness']:.1f}, Brightness={c['brightness']:.1f}, "
+#               f"Contrast={c['contrast']:.1f}")
+#         filename = f"custom_frame_{i+1}_{uuid.uuid4().hex[:6]}.jpg"
+#         filepath = os.path.join(output_dir, filename)
+#         cv2.imwrite(filepath, item["frame"])
+#         thumbnails.append(filepath)
+
+#     return thumbnails
+
 def score_frame(frame, frame_idx=None):
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     brightness = np.mean(gray)
@@ -252,7 +370,6 @@ def score_frame(frame, frame_idx=None):
         }
     }
 
-
 def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to_score=30):
     os.makedirs(output_dir, exist_ok=True)
     cap = cv2.VideoCapture(video_path)
@@ -263,8 +380,7 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
     frame_indices = np.linspace(0, total_frames - 1, num=num_frames_to_score, dtype=int)
     print(f"⚙️ Sampling {len(frame_indices)} frames from video (first 5 indices: {frame_indices[:5]})")
 
-    # ✅ Preload frames into memory (before threading)
-    frames = []
+    scored_frames = []
     for idx in frame_indices:
         print(f"🔍 Attempting to grab frame at index {idx}/{total_frames}")
         cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
@@ -272,46 +388,11 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
         if not ret or frame is None:
             print(f"⚠️ Failed to read frame at index {idx}")
             continue
-        frames.append((idx, frame))
+        frame = cv2.resize(frame, (640, 360))
+        scored = score_frame(frame, frame_idx=idx)
+        scored_frames.append(scored)
+
     cap.release()
-
-    # 🧠 Define scoring logic
-    def score_frame(frame, frame_idx=None):
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        brightness = np.mean(gray)
-        sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
-        contrast = np.std(gray)
-
-        score = 0.5 * sharpness + 0.3 * brightness + 0.2 * contrast
-
-        return {
-            "frame": frame,
-            "index": frame_idx,
-            "score": score,
-            "components": {
-                "sharpness": sharpness,
-                "brightness": brightness,
-                "contrast": contrast
-            }
-        }
-
-    # ⚡ Multithreaded scoring
-    def process_frame(data):
-        idx, frame = data
-        try:
-            frame = cv2.resize(frame, (640, 360))
-            return score_frame(frame, frame_idx=idx)
-        except Exception as e:
-            print(f"❌ Error processing frame {idx}: {e}")
-            return None
-
-    scored_frames = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [executor.submit(process_frame, f) for f in frames]
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-            if result:
-                scored_frames.append(result)
 
     if not scored_frames:
         raise ValueError("❌ No frames were successfully scored.")
@@ -338,7 +419,6 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
     diverse_frames = [item[1] for item in diverse_scores[:4]]
     all_selected = list(chosen.values()) + diverse_frames
 
-    # 💾 Save selected thumbnails
     thumbnails = []
     for i, item in enumerate(all_selected):
         c = item["components"]
@@ -351,6 +431,7 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
         thumbnails.append(filepath)
 
     return thumbnails
+
 
 def clean_directories(*dirs):
     for d in dirs:
