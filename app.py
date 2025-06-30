@@ -377,22 +377,33 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
         raise ValueError(f"Failed to open video file: {video_path}")
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    frame_indices = np.linspace(0, total_frames - 1, num=num_frames_to_score, dtype=int)
-    print(f"⚙️ Sampling {len(frame_indices)} frames from video (first 5 indices: {frame_indices[:5]})")
+    interval = max(1, total_frames // num_frames_to_score)
 
-    scored_frames = []
-    for idx in frame_indices:
-        print(f"🔍 Attempting to grab frame at index {idx}/{total_frames}")
-        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+    print(f"📼 Total frames: {total_frames}, Sampling every {interval} frames.")
+
+    frames = []
+    idx = 0
+    selected = 0
+
+    while cap.isOpened():
         ret, frame = cap.read()
-        if not ret or frame is None:
-            print(f"⚠️ Failed to read frame at index {idx}")
-            continue
-        frame = cv2.resize(frame, (640, 360))
-        scored = score_frame(frame, frame_idx=idx)
-        scored_frames.append(scored)
+        if not ret:
+            break
+        if idx % interval == 0:
+            try:
+                frame = cv2.resize(frame, (480, 270))  # ⬇️ Smaller frame for performance
+                frames.append((idx, frame))
+                selected += 1
+                if selected >= num_frames_to_score:
+                    break
+            except Exception as e:
+                print(f"❌ Error resizing frame {idx}: {e}")
+        idx += 1
 
     cap.release()
+
+    # Score all sampled frames
+    scored_frames = [score_frame(frame, idx) for idx, frame in frames]
 
     if not scored_frames:
         raise ValueError("❌ No frames were successfully scored.")
@@ -419,6 +430,7 @@ def extract_custom_thumbnails(video_path, output_dir="thumbnails", num_frames_to
     diverse_frames = [item[1] for item in diverse_scores[:4]]
     all_selected = list(chosen.values()) + diverse_frames
 
+    # Save selected thumbnails
     thumbnails = []
     for i, item in enumerate(all_selected):
         c = item["components"]
